@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f3f4f6;
+           display: flex; justify-content: center; align-items: center;
+           min-height: 100vh; }
+    .card { background: white; border-radius: 12px; padding: 40px;
+            width: 100%; max-width: 420px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #111827; }
+    p.sub { color: #6b7280; font-size: 14px; margin-bottom: 28px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+    .tab { flex: 1; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;
+           background: white; cursor: pointer; font-size: 14px; font-weight: 600;
+           color: #6b7280; transition: all 0.2s; }
+    .tab.active { border-color: #1a56db; color: #1a56db; background: #ebf5ff; }
+    .section { display: none; }
+    .section.active { display: block; }
+    input { width: 100%; padding: 12px 14px; border: 1.5px solid #e5e7eb;
+            border-radius: 8px; font-size: 15px; margin-bottom: 12px;
+            transition: border-color 0.2s; }
+    input:focus { outline: none; border-color: #1a56db; }
+    button.primary { width: 100%; padding: 12px; background: #1a56db;
+                     color: white; border: none; border-radius: 8px;
+                     font-size: 15px; font-weight: 600; cursor: pointer; }
+    button.primary:hover { background: #1e40af; }
+    button.google { width: 100%; padding: 12px; background: white;
+
+                    color: #374151; border: 1.5px solid #e5e7eb; border-radius: 8px;
+                    font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
+    button.google:hover { background: #f9fafb; }
+    .divider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .divider span { color: #9ca3af; font-size: 13px; white-space: nowrap; }
+    .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid #e5e7eb; }
+    .msg { padding: 12px; border-radius: 8px; font-size: 14px; margin-top: 12px; }
+    .msg.success { background: #ecfdf5; color: #065f46; }
+    .msg.error { background: #fef2f2; color: #991b1b; }
+    .profile-card { text-align: center; }
+    .profile-card img { width: 72px; height: 72px; border-radius: 50%; margin-bottom: 12px; }
+    .profile-card h2 { font-size: 20px; margin-bottom: 4px; }
+    .profile-card p { color: #6b7280; font-size: 14px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+
+<div class="card">
+  <!-- AUTH FORM -->
+  <div id="auth-section">
+    <h1>Welcome</h1>
+    <p class="sub">Sign in or create your account</p>
+
+
+    <button class="google" onclick="signInGoogle()">
+      🔵 Continue with Google
+    </button>
+
+
+    <div class="divider"><span>or use</span></div>
+
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('email')">Email OTP</button>
+      <button class="tab" onclick="switchTab('phone')">Phone OTP</button>
+    </div>
+
+
+    <div id="email-section" class="section active">
+      <input type="email" id="email-input" placeholder="your@email.com" />
+      <input type="text" id="email-otp" placeholder="Enter OTP from email" style="display:none" />
+      <button class="primary" onclick="handleEmail()">Send OTP</button>
+    </div>
+
+    <div id="phone-section" class="section">
+      <input type="tel" id="phone-input" placeholder="+91 9876543210" />
+      <input type="text" id="phone-otp" placeholder="Enter OTP from SMS" style="display:none" />
+      <button class="primary" onclick="handlePhone()">Send OTP</button>
+    </div>
+
+
+    <div id="msg"></div>
+  </div>
+
+
+  <!-- LOGGED IN STATE -->
+  <div id="profile-section" style="display:none" class="profile-card">
+    <img id="user-avatar" src="" alt="Profile" />
+    <h2 id="user-name"></h2>
+    <p id="user-email"></p>
+    <button class="primary" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+
+<script>
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+
+  let emailOtpSent = false, phoneOtpSent = false;
+
+
+  // Check if already logged in
+  sb.auth.getSession().then(({ data }) => {
+    if (data.session) showProfile(data.session.user);
+  });
+
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (session) showProfile(session.user);
+    else showAuth();
+  });
+
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t,i) =>
+      t.classList.toggle('active', (tab==='email'&&i===0)||(tab==='phone'&&i===1)));
+    document.getElementById('email-section').classList.toggle('active', tab==='email');
+
+    document.getElementById('phone-section').classList.toggle('active', tab==='phone');
+    msg('');
+  }
+
+
+  async function signInGoogle() {
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href }
+    });
+    if (error) msg(error.message, 'error');
+  }
+
+
+  async function handleEmail() {
+    const email = document.getElementById('email-input').value;
+    const otpEl = document.getElementById('email-otp');
+    if (!emailOtpSent) {
+      const { error } = await sb.auth.signInWithOtp({ email });
+      if (error) { msg(error.message, 'error'); return; }
+      emailOtpSent = true;
+      otpEl.style.display = 'block';
+      msg('OTP sent! Check your email.', 'success');
+    } else {
+      const token = otpEl.value;
+      const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+      if (error) msg(error.message, 'error');
+    }
+  }
+
+
+  async function handlePhone() {
+    const phone = document.getElementById('phone-input').value;
+    const otpEl = document.getElementById('phone-otp');
+    if (!phoneOtpSent) {
+      const { error } = await sb.auth.signInWithOtp({ phone });
+      if (error) { msg(error.message, 'error'); return; }
+      phoneOtpSent = true;
+      otpEl.style.display = 'block';
+      msg('OTP sent to your phone!', 'success');
+    } else {
+      const token = otpEl.value;
+      const { error } = await sb.auth.verifyOtp({ phone, token, type: 'sms' });
+      if (error) msg(error.message, 'error');
+    }
+
+  }
+
+
+  async function signOut() {
+    await sb.auth.signOut();
+  }
+
+
+  function showProfile(user) {
+    document.getElementById('auth-section').style.display = 'none';
+    document.getElementById('profile-section').style.display = 'block';
+    const meta = user.user_metadata;
+    document.getElementById('user-avatar').src =
+      meta.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(meta.full_name || user.email || '?');
+    document.getElementById('user-name').textContent = meta.full_name || 'Verified user';
+    document.getElementById('user-email').textContent = user.email || user.phone || '';
+  }
+
+
+  function showAuth() {
+    document.getElementById('auth-section').style.display = 'block';
+    document.getElementById('profile-section').style.display = 'none';
+  }
+
+
+  function msg(text, type='') {
+    const el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = 'msg ' + type;
+  }
+</script>
+
+
+</body>
+</html>
+
