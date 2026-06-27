@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'Authorization': 'Basic ' + Buffer.from(`${GATEWAY_USER}:${GATEWAY_PASS}`).toString('base64')
       },
-      body: JSON.stringify({ scope: 'send' })
+      body: JSON.stringify({ scopes: ['messages:send'] })
     });
 
     if (!tokenRes.ok) {
@@ -28,7 +28,8 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Auth failed: ' + err });
     }
 
-    const { token } = await tokenRes.json();
+    const tokenData = await tokenRes.json();
+    const token = tokenData.token || tokenData.accessToken || tokenData.access_token;
 
     // Step 2: Send SMS using the token
     const smsRes = await fetch('https://api.sms-gate.app/3rdparty/v1/messages', {
