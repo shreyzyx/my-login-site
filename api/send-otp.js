@@ -7,15 +7,35 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { phone, otp } = req.body;
-
   if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP required' });
 
+  const GATEWAY_USER = 'Y5WFSK';
+  const GATEWAY_PASS = 'kj0eeduqli9qau';
+
   try {
-    const response = await fetch('https://api.sms-gate.app', {
+    // Step 1: Get a token
+    const tokenRes = await fetch('https://api.sms-gate.app/3rdparty/v1/auth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + Buffer.from('Y5WFSK:kj0eeduqli9qau').toString('base64')
+        'Authorization': 'Basic ' + Buffer.from(`${GATEWAY_USER}:${GATEWAY_PASS}`).toString('base64')
+      },
+      body: JSON.stringify({ scope: 'send' })
+    });
+
+    if (!tokenRes.ok) {
+      const err = await tokenRes.text();
+      return res.status(401).json({ error: 'Auth failed: ' + err });
+    }
+
+    const { token } = await tokenRes.json();
+
+    // Step 2: Send SMS using the token
+    const smsRes = await fetch('https://api.sms-gate.app/3rdparty/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
       },
       body: JSON.stringify({
         textMessage: { text: `Your hellohr.in OTP is: ${otp}. Valid for 10 minutes.` },
@@ -23,13 +43,14 @@ export default async function handler(req, res) {
       })
     });
 
-    const responseText = await response.text();
+    const smsText = await smsRes.text();
 
-    if (response.ok) {
+    if (smsRes.ok) {
       res.status(200).json({ success: true });
     } else {
-      res.status(500).json({ error: responseText });
+      res.status(500).json({ error: smsText });
     }
+
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
