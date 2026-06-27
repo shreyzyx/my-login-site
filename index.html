@@ -30,7 +30,6 @@
                      font-size: 15px; font-weight: 600; cursor: pointer; }
     button.primary:hover { background: #1e40af; }
     button.google { width: 100%; padding: 12px; background: white;
-
                     color: #374151; border: 1.5px solid #e5e7eb; border-radius: 8px;
                     font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
     button.google:hover { background: #f9fafb; }
@@ -48,27 +47,22 @@
 </head>
 <body>
 
-
 <div class="card">
   <!-- AUTH FORM -->
   <div id="auth-section">
     <h1>Welcome</h1>
     <p class="sub">Sign in or create your account</p>
 
-
     <button class="google" onclick="signInGoogle()">
       🔵 Continue with Google
     </button>
 
-
     <div class="divider"><span>or use</span></div>
-
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab('email')">Email OTP</button>
       <button class="tab" onclick="switchTab('phone')">Phone OTP</button>
     </div>
-
 
     <div id="email-section" class="section active">
       <input type="email" id="email-input" placeholder="your@email.com" />
@@ -79,13 +73,11 @@
     <div id="phone-section" class="section">
       <input type="tel" id="phone-input" placeholder="+91 9876543210" />
       <input type="text" id="phone-otp" placeholder="Enter OTP from SMS" style="display:none" />
-      <button class="primary" onclick="handlePhone()">Send OTP</button>
+      <button class="primary" id="phone-btn" onclick="handlePhone()">Send OTP</button>
     </div>
-
 
     <div id="msg"></div>
   </div>
-
 
   <!-- LOGGED IN STATE -->
   <div id="profile-section" style="display:none" class="profile-card">
@@ -96,37 +88,37 @@
   </div>
 </div>
 
-
 <script>
   const SUPABASE_URL = 'https://xloqrlahufajfipriyla.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhsb3FybGFodWZhamZpcHJpeWxhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjQ4ODIxMiwiZXhwIjoyMDk4MDY0MjEyfQ.JRpVh2zc1EAt-5kzy8FvIoHkoIk2FHL_S_OZUkyKR9k';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  // Android SMS Gateway cloud credentials
+  const GATEWAY_URL = 'https://api.sms-gate.app';
+  const GATEWAY_USER = 'Y5WFSK';
+  const GATEWAY_PASS = 'kj0eeduqli9qau';
 
-  let emailOtpSent = false, phoneOtpSent = false;
-
+  let emailOtpSent = false;
+  let phoneOtpSent = false;
+  let generatedOtp = '';
 
   // Check if already logged in
   sb.auth.getSession().then(({ data }) => {
     if (data.session) showProfile(data.session.user);
   });
 
-
   sb.auth.onAuthStateChange((event, session) => {
     if (session) showProfile(session.user);
     else showAuth();
   });
 
-
   function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach((t,i) =>
-      t.classList.toggle('active', (tab==='email'&&i===0)||(tab==='phone'&&i===1)));
-    document.getElementById('email-section').classList.toggle('active', tab==='email');
-
-    document.getElementById('phone-section').classList.toggle('active', tab==='phone');
+    document.querySelectorAll('.tab').forEach((t, i) =>
+      t.classList.toggle('active', (tab === 'email' && i === 0) || (tab === 'phone' && i === 1)));
+    document.getElementById('email-section').classList.toggle('active', tab === 'email');
+    document.getElementById('phone-section').classList.toggle('active', tab === 'phone');
     msg('');
   }
-
 
   async function signInGoogle() {
     const { error } = await sb.auth.signInWithOAuth({
@@ -135,7 +127,6 @@
     });
     if (error) msg(error.message, 'error');
   }
-
 
   async function handleEmail() {
     const email = document.getElementById('email-input').value;
@@ -153,55 +144,98 @@
     }
   }
 
-
   async function handlePhone() {
-    const phone = document.getElementById('phone-input').value;
+    const phone = document.getElementById('phone-input').value.trim();
     const otpEl = document.getElementById('phone-otp');
+    const btn = document.getElementById('phone-btn');
+
     if (!phoneOtpSent) {
-      const { error } = await sb.auth.signInWithOtp({ phone });
-      if (error) { msg(error.message, 'error'); return; }
-      phoneOtpSent = true;
-      otpEl.style.display = 'block';
-      msg('OTP sent to your phone!', 'success');
+      // Generate 6-digit OTP
+      generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      msg('Sending OTP...', '');
+
+      try {
+        const response = await fetch(`${GATEWAY_URL}/api/v1/message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic ' + btoa(GATEWAY_USER + ':' + GATEWAY_PASS)
+          },
+          body: JSON.stringify({
+            message: `Your hellohr.in OTP is: ${generatedOtp}. Valid for 10 minutes.`,
+            phoneNumbers: [phone]
+          })
+        });
+
+        if (response.ok) {
+          phoneOtpSent = true;
+          otpEl.style.display = 'block';
+          btn.textContent = 'Verify OTP';
+          msg('OTP sent to ' + phone, 'success');
+        } else {
+          const err = await response.text();
+          msg('Failed to send OTP: ' + err, 'error');
+        }
+      } catch (e) {
+        msg('Error: ' + e.message, 'error');
+      }
+
     } else {
-      const token = otpEl.value;
-      const { error } = await sb.auth.verifyOtp({ phone, token, type: 'sms' });
-      if (error) msg(error.message, 'error');
+      // Verify OTP
+      const entered = otpEl.value.trim();
+      if (entered === generatedOtp) {
+        // Save phone to Supabase profiles table
+        const { data: sessionData } = await sb.auth.getSession();
+        if (!sessionData.session) {
+          // Sign in anonymously and attach phone
+          const { data, error } = await sb.auth.signInAnonymously();
+          if (!error) {
+            await sb.from('profiles').upsert({
+              id: data.user.id,
+              phone: phone,
+              provider: 'phone'
+            });
+            showProfile({ ...data.user, user_metadata: { full_name: 'Phone User' }, phone });
+          }
+        }
+        msg('Phone verified successfully! ✓', 'success');
+      } else {
+        msg('Wrong OTP. Please try again.', 'error');
+      }
     }
-
   }
-
 
   async function signOut() {
     await sb.auth.signOut();
   }
 
-
   function showProfile(user) {
     document.getElementById('auth-section').style.display = 'none';
     document.getElementById('profile-section').style.display = 'block';
-    const meta = user.user_metadata;
+    const meta = user.user_metadata || {};
     document.getElementById('user-avatar').src =
-      meta.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(meta.full_name || user.email || '?');
-    document.getElementById('user-name').textContent = meta.full_name || 'Verified user';
+      meta.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(meta.full_name || user.email || user.phone || '?');
+    document.getElementById('user-name').textContent = meta.full_name || 'Verified User';
     document.getElementById('user-email').textContent = user.email || user.phone || '';
   }
-
 
   function showAuth() {
     document.getElementById('auth-section').style.display = 'block';
     document.getElementById('profile-section').style.display = 'none';
+    // Reset phone flow
+    phoneOtpSent = false;
+    generatedOtp = '';
+    document.getElementById('phone-otp').style.display = 'none';
+    document.getElementById('phone-btn').textContent = 'Send OTP';
   }
 
-
-  function msg(text, type='') {
+  function msg(text, type = '') {
     const el = document.getElementById('msg');
     el.textContent = text;
     el.className = 'msg ' + type;
   }
 </script>
 
-
 </body>
 </html>
-
