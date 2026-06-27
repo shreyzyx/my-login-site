@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP required' });
 
   try {
-    const response = await fetch('https://api.sms-gate.app/3rdparty/v1/messages', {
+    const response = await fetch('https://api.sms-gate.app', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
