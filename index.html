@@ -48,7 +48,6 @@
 <body>
 
 <div class="card">
-  <!-- AUTH FORM -->
   <div id="auth-section">
     <h1>Welcome</h1>
     <p class="sub">Sign in or create your account</p>
@@ -79,7 +78,6 @@
     <div id="msg"></div>
   </div>
 
-  <!-- LOGGED IN STATE -->
   <div id="profile-section" style="display:none" class="profile-card">
     <img id="user-avatar" src="" alt="Profile" />
     <h2 id="user-name"></h2>
@@ -93,16 +91,10 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhsb3FybGFodWZhamZpcHJpeWxhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjQ4ODIxMiwiZXhwIjoyMDk4MDY0MjEyfQ.JRpVh2zc1EAt-5kzy8FvIoHkoIk2FHL_S_OZUkyKR9k';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // Android SMS Gateway cloud credentials
-  const GATEWAY_URL = 'https://api.sms-gate.app:443';
-  const GATEWAY_USER = 'Y5WFSK';
-  const GATEWAY_PASS = 'kj0eeduqli9qau';
-
   let emailOtpSent = false;
   let phoneOtpSent = false;
   let generatedOtp = '';
 
-  // Check if already logged in
   sb.auth.getSession().then(({ data }) => {
     if (data.session) showProfile(data.session.user);
   });
@@ -150,23 +142,17 @@
     const btn = document.getElementById('phone-btn');
 
     if (!phoneOtpSent) {
-      // Generate 6-digit OTP
       generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
       msg('Sending OTP...', '');
 
       try {
-        const response = await fetch(`${GATEWAY_URL}/api/v1/message`, {
+        const response = await fetch('/api/send-otp', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Basic ' + btoa(GATEWAY_USER + ':' + GATEWAY_PASS)
-          },
-          body: JSON.stringify({
-            message: `Your hellohr.in OTP is: ${generatedOtp}. Valid for 10 minutes.`,
-            phoneNumbers: [phone]
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, otp: generatedOtp })
         });
+
+        const data = await response.json();
 
         if (response.ok) {
           phoneOtpSent = true;
@@ -174,30 +160,23 @@
           btn.textContent = 'Verify OTP';
           msg('OTP sent to ' + phone, 'success');
         } else {
-          const err = await response.text();
-          msg('Failed to send OTP: ' + err, 'error');
+          msg('Failed to send OTP: ' + (data.error || 'Unknown error'), 'error');
         }
       } catch (e) {
         msg('Error: ' + e.message, 'error');
       }
 
     } else {
-      // Verify OTP
       const entered = otpEl.value.trim();
       if (entered === generatedOtp) {
-        // Save phone to Supabase profiles table
-        const { data: sessionData } = await sb.auth.getSession();
-        if (!sessionData.session) {
-          // Sign in anonymously and attach phone
-          const { data, error } = await sb.auth.signInAnonymously();
-          if (!error) {
-            await sb.from('profiles').upsert({
-              id: data.user.id,
-              phone: phone,
-              provider: 'phone'
-            });
-            showProfile({ ...data.user, user_metadata: { full_name: 'Phone User' }, phone });
-          }
+        const { data, error } = await sb.auth.signInAnonymously();
+        if (!error) {
+          await sb.from('profiles').upsert({
+            id: data.user.id,
+            phone: phone,
+            provider: 'phone'
+          });
+          showProfile({ ...data.user, user_metadata: { full_name: 'Phone User' }, phone });
         }
         msg('Phone verified successfully! ✓', 'success');
       } else {
@@ -223,7 +202,6 @@
   function showAuth() {
     document.getElementById('auth-section').style.display = 'block';
     document.getElementById('profile-section').style.display = 'none';
-    // Reset phone flow
     phoneOtpSent = false;
     generatedOtp = '';
     document.getElementById('phone-otp').style.display = 'none';
