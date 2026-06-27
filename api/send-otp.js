@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP required' });
 
   try {
-    const response = await fetch('https://api.sms-gate.app/3rdparty/v1/message', {
+    const response = await fetch('https://api.sms-gate.app/mobile/v1/message', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -23,12 +23,12 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await response.text();
+    const responseText = await response.text();
 
     if (response.ok) {
       res.status(200).json({ success: true });
     } else {
-      res.status(500).json({ error: data });
+      res.status(500).json({ error: responseText });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
