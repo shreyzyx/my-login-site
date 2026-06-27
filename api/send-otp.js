@@ -11,14 +11,14 @@ export default async function handler(req, res) {
   if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP required' });
 
   try {
-    const response = await fetch('https://api.sms-gate.app/mobile/v1/message', {
+    const response = await fetch('https://api.sms-gate.app/3rdparty/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Basic ' + Buffer.from('Y5WFSK:kj0eeduqli9qau').toString('base64')
       },
       body: JSON.stringify({
-        message: `Your hellohr.in OTP is: ${otp}. Valid for 10 minutes.`,
+        textMessage: { text: `Your hellohr.in OTP is: ${otp}. Valid for 10 minutes.` },
         phoneNumbers: [phone]
       })
     });
